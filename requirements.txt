@@ -1,23 +1,9 @@
-# ================================================================================
-# LUXURY E-COMMERCE ANALYTICS DASHBOARD
-# Requirements File
-# ================================================================================
+# Luxury E-Commerce Dashboard Dependencies
+# Compatible with Python 3.9 - 3.12
 
-# Core Framework
-streamlit==1.29.0
-
-# Data Processing
-pandas==2.1.3
-numpy==1.26.2
-
-# Visualization
-plotly==5.18.0
-
-# Date/Time Utilities
-python-dateutil==2.8.2
-
-# Excel Support (optional, for data export)
-openpyxl==3.1.2
-
-# Additional utilities
-pillow==10.1.0
+streamlit>=1.28.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+numpy>=1.24.0,<2.0.0
+plotly>=5.15.0,<6.0.0
+openpyxl>=3.1.0,<4.0.0
+python-dateutil>=2.8.0,<3.0.0
