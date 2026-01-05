@@ -433,9 +433,28 @@ with col1:
 with col2:
     end_date = st.date_input("To", max_date, min_value=min_date, max_value=max_date)
 
-st.sidebar.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("### ℹ️ About Local Filters")
-st.sidebar.info("Each chart has its own filter controls for granular analysis. Look for filter dropdowns above each visualization.")
+st.sidebar.markdown("""
+<div style='background: linear-gradient(135deg, #1a2d47, #0d1b2a); 
+            border: 1px solid #2a4a7f; 
+            border-radius: 12px; 
+            padding: 20px;
+            margin-top: 20px;'>
+    <p style='color: #3a86ff; font-weight: bold; font-size: 1rem; margin-bottom: 15px;'>
+        👨🏻‍💻 Built by
+    </p>
+    <p style='color: #8facc4; font-size: 0.75rem; letter-spacing: 1px; margin-bottom: 10px;'>
+        GROUP 1 | SP JAIN MAIB
+    </p>
+    <p style='color: #e8e8e8; font-size: 0.85rem; line-height: 2;'>
+        1. Gagandeep Singh<br>
+        2. Anurag Devarakonda<br>
+        3. Tanishk Verma<br>
+        4. Atharva<br>
+        5. Geet<br>
+        6. Aditya Chitale
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # ================================================================================
 # BASE FILTERED DATA (Date Only)
