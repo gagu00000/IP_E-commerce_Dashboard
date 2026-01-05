@@ -589,17 +589,18 @@ if view_mode == "Executive View":
     
     with col1:
         st.markdown("### 📊 Revenue Trend")
-        agg_type = st.radio("View by", ["Daily", "Weekly"], horizontal=True, key="rev_agg")
+        agg_type = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="rev_agg")
         
         delivered = filtered_orders[filtered_orders['order_status'] == 'Delivered'].copy()
         
         if len(delivered) > 0:
-            if agg_type == "Daily":
-                revenue_trend = delivered.groupby(delivered['order_date'].dt.date)['net_amount'].sum().reset_index()
+            if agg_type == "Weekly":
+                delivered['period'] = delivered['order_date'].dt.to_period('W').apply(lambda x: x.start_time)
+                revenue_trend = delivered.groupby('period')['net_amount'].sum().reset_index()
                 revenue_trend.columns = ['Date', 'Revenue']
-            else:
-                delivered['week'] = delivered['order_date'].dt.to_period('W').apply(lambda x: x.start_time)
-                revenue_trend = delivered.groupby('week')['net_amount'].sum().reset_index()
+            else:  # Monthly
+                delivered['period'] = delivered['order_date'].dt.to_period('M').apply(lambda x: x.start_time)
+                revenue_trend = delivered.groupby('period')['net_amount'].sum().reset_index()
                 revenue_trend.columns = ['Date', 'Revenue']
             
             fig = px.line(revenue_trend, x='Date', y='Revenue', markers=True,
