@@ -819,12 +819,14 @@ with tab2:
     
     with col1:
         # Discount distribution
-        filtered_orders['discount_bucket'] = pd.cut(
-            filtered_orders['discount_amount'] / filtered_orders['gross_amount'] * 100,
+        filtered_orders_copy = filtered_orders.copy()
+        filtered_orders_copy['discount_pct'] = (filtered_orders_copy['discount_amount'] / filtered_orders_copy['gross_amount'] * 100).fillna(0)
+        filtered_orders_copy['discount_bucket'] = pd.cut(
+            filtered_orders_copy['discount_pct'],
             bins=[-1, 0, 5, 15, 30, 100],
             labels=['No Discount', '0-5%', '5-15%', '15-30%', '30%+']
         )
-        discount_dist = filtered_orders['discount_bucket'].value_counts().reset_index()
+        discount_dist = filtered_orders_copy['discount_bucket'].value_counts().reset_index()
         discount_dist.columns = ['Discount Range', 'Count']
         
         fig = px.pie(
@@ -843,24 +845,23 @@ with tab2:
     
     with col2:
         # Coupon performance
-        coupon_performance = filtered_orders[filtered_orders['coupon_code'].notna()].groupby(
-            'coupon_code'
-        ).agg({
-            'net_amount': 'sum',
-            'order_id': 'count',
-            'discount_amount': 'sum'
-        }).round(2)
-        coupon_performance.columns = ['Revenue', 'Usage Count', 'Discount Given']
-        coupon_performance = coupon_performance.sort_values('Revenue', ascending=False).head(5).reset_index()
-        
-        st.markdown("##### Top Coupon Codes Performance")
-        st.dataframe(
-            coupon_performance.style.format({
-                'Revenue': 'AED {:,.0f}',
-                'Discount Given': 'AED {:,.0f}'
-            }),
-            use_container_width=True
-        )
+        coupon_orders = filtered_orders[filtered_orders['coupon_code'].notna()]
+        if len(coupon_orders) > 0:
+            coupon_performance = coupon_orders.groupby('coupon_code').agg({
+                'net_amount': 'sum',
+                'order_id': 'count',
+                'discount_amount': 'sum'
+            }).round(2)
+            coupon_performance.columns = ['Revenue', 'Usage Count', 'Discount Given']
+            coupon_performance = coupon_performance.sort_values('Revenue', ascending=False).head(5).reset_index()
+            
+            st.markdown("##### Top Coupon Codes Performance")
+            display_coupon = coupon_performance.copy()
+            display_coupon['Revenue'] = display_coupon['Revenue'].apply(lambda x: f"AED {x:,.0f}")
+            display_coupon['Discount Given'] = display_coupon['Discount Given'].apply(lambda x: f"AED {x:,.0f}")
+            st.dataframe(display_coupon, use_container_width=True)
+        else:
+            st.info("No coupon data available for the selected period.")
 
 # ================================================================================
 # TAB 3: CUSTOMER INTELLIGENCE
@@ -1024,11 +1025,12 @@ with tab3:
     top_customers = top_customers[['Customer ID', 'customer_name', 'customer_segment', 'city', 'Total Spent', 'Order Count']]
     top_customers.columns = ['ID', 'Name', 'Segment', 'City', 'Total Spent (AED)', 'Orders']
     
-    # Display dataframe without background_gradient
-    st.dataframe(
-        top_customers.style.format({'Total Spent (AED)': '{:,.2f}'}),
-        use_container_width=True
-    )
+    # Format the display dataframe
+    display_df = top_customers.copy()
+    display_df['Total Spent (AED)'] = display_df['Total Spent (AED)'].apply(lambda x: f"AED {x:,.2f}")
+    
+    st.dataframe(display_df, use_container_width=True)
+
 # ================================================================================
 # TAB 4: OPERATIONS & FULFILLMENT
 # ================================================================================
@@ -1150,30 +1152,34 @@ with tab4:
     
     with col1:
         st.markdown("#### ⚠️ Delay Reasons Breakdown")
-        delay_reasons = filtered_fulfillment[
+        delay_data = filtered_fulfillment[
             filtered_fulfillment['delay_reason'].notna() & 
             (filtered_fulfillment['delay_reason'] != 'Order Cancelled')
-        ]['delay_reason'].value_counts().reset_index()
-        delay_reasons.columns = ['Reason', 'Count']
-        
-        fig = px.bar(
-            delay_reasons,
-            x='Count',
-            y='Reason',
-            orientation='h',
-            color='Count',
-            color_continuous_scale=['#8b7355', '#c9a227', '#f4d03f']
-        )
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#f5f5f5',
-            showlegend=False,
-            coloraxis_showscale=False,
-            xaxis=dict(gridcolor='rgba(201,162,39,0.1)'),
-            yaxis=dict(gridcolor='rgba(201,162,39,0.1)')
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        ]
+        if len(delay_data) > 0:
+            delay_reasons = delay_data['delay_reason'].value_counts().reset_index()
+            delay_reasons.columns = ['Reason', 'Count']
+            
+            fig = px.bar(
+                delay_reasons,
+                x='Count',
+                y='Reason',
+                orientation='h',
+                color='Count',
+                color_continuous_scale=['#8b7355', '#c9a227', '#f4d03f']
+            )
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font_color='#f5f5f5',
+                showlegend=False,
+                coloraxis_showscale=False,
+                xaxis=dict(gridcolor='rgba(201,162,39,0.1)'),
+                yaxis=dict(gridcolor='rgba(201,162,39,0.1)')
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No delay data available for the selected period.")
     
     with col2:
         st.markdown("#### 🚛 Delivery Partner Performance")
@@ -1208,42 +1214,46 @@ with tab4:
     st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
     st.markdown("#### 📍 Delivery Zone Performance")
     
-    zone_perf = filtered_fulfillment[filtered_fulfillment['delivery_zone'] != 'Unknown'].groupby('delivery_zone').agg({
-        'order_id': 'count',
-        'delivery_status': lambda x: (x == 'On Time').sum() / len(x) * 100 if len(x) > 0 else 0
-    }).reset_index()
-    zone_perf.columns = ['Zone', 'Total Deliveries', 'On-Time Rate']
-    zone_perf = zone_perf.sort_values('Zone')
-    
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=zone_perf['Zone'],
-        y=zone_perf['Total Deliveries'],
-        name='Deliveries',
-        marker_color='#c9a227'
-    ))
-    fig.add_trace(go.Scatter(
-        x=zone_perf['Zone'],
-        y=zone_perf['On-Time Rate'],
-        name='On-Time %',
-        yaxis='y2',
-        mode='lines+markers+text',
-        text=[f'{v:.0f}%' for v in zone_perf['On-Time Rate']],
-        textposition='top center',
-        line=dict(color='#4ade80', width=3),
-        marker=dict(size=10)
-    ))
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#f5f5f5',
-        yaxis=dict(title='Total Deliveries', gridcolor='rgba(201,162,39,0.1)'),
-        yaxis2=dict(title='On-Time %', overlaying='y', side='right', range=[0, 100]),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02),
-        xaxis=dict(gridcolor='rgba(201,162,39,0.1)')
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    zone_data = filtered_fulfillment[filtered_fulfillment['delivery_zone'] != 'Unknown']
+    if len(zone_data) > 0:
+        zone_perf = zone_data.groupby('delivery_zone').agg({
+            'order_id': 'count',
+            'delivery_status': lambda x: (x == 'On Time').sum() / len(x) * 100 if len(x) > 0 else 0
+        }).reset_index()
+        zone_perf.columns = ['Zone', 'Total Deliveries', 'On-Time Rate']
+        zone_perf = zone_perf.sort_values('Zone')
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=zone_perf['Zone'],
+            y=zone_perf['Total Deliveries'],
+            name='Deliveries',
+            marker_color='#c9a227'
+        ))
+        fig.add_trace(go.Scatter(
+            x=zone_perf['Zone'],
+            y=zone_perf['On-Time Rate'],
+            name='On-Time %',
+            yaxis='y2',
+            mode='lines+markers+text',
+            text=[f'{v:.0f}%' for v in zone_perf['On-Time Rate']],
+            textposition='top center',
+            line=dict(color='#4ade80', width=3),
+            marker=dict(size=10)
+        ))
+        
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#f5f5f5',
+            yaxis=dict(title='Total Deliveries', gridcolor='rgba(201,162,39,0.1)'),
+            yaxis2=dict(title='On-Time %', overlaying='y', side='right', range=[0, 100]),
+            legend=dict(orientation='h', yanchor='bottom', y=1.02),
+            xaxis=dict(gridcolor='rgba(201,162,39,0.1)')
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No delivery zone data available for the selected period.")
 
 # ================================================================================
 # TAB 5: RETURNS ANALYSIS
