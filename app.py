@@ -1024,13 +1024,11 @@ with tab3:
     top_customers = top_customers[['Customer ID', 'customer_name', 'customer_segment', 'city', 'Total Spent', 'Order Count']]
     top_customers.columns = ['ID', 'Name', 'Segment', 'City', 'Total Spent (AED)', 'Orders']
     
+    # Display dataframe without background_gradient
     st.dataframe(
-        top_customers.style.format({'Total Spent (AED)': '{:,.2f}'}).background_gradient(
-            subset=['Total Spent (AED)'], cmap='YlOrBr'
-        ),
+        top_customers.style.format({'Total Spent (AED)': '{:,.2f}'}),
         use_container_width=True
     )
-
 # ================================================================================
 # TAB 4: OPERATIONS & FULFILLMENT
 # ================================================================================
