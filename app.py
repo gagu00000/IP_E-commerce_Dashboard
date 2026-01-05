@@ -1333,69 +1333,513 @@ else:
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== WHAT-IF ANALYSIS =====
-    st.markdown("### 🔮 What-If Analysis")
+    # ================================================================================
+# WHAT-IF ANALYSIS - SINGLE DRIVER MODEL
+# ================================================================================
+
+st.markdown("### 🔮 What-If Analysis: Single-Driver Model")
+
+st.markdown("""
+<div class='insight-box'>
+    <div class='insight-title'>📊 Model Explanation</div>
+    <div class='insight-text'>
+        <p><strong>On-Time Delivery Rate (OTD)</strong> is the single driver in this model. 
+        Improving OTD cascades through multiple business metrics:</p>
+        <p>OTD ↑ → Cancellations ↓ → Returns ↓ → Refunds ↓ → Satisfaction ↑ → Repeat Purchases ↑</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+# ===== CURRENT STATE METRICS =====
+st.markdown("#### 📈 Current State Metrics")
+
+# Calculate current metrics from data
+current_otd = mgr_kpis['on_time_rate']
+current_cancel_rate = mgr_kpis['cancellation_rate']
+current_refunds = mgr_kpis['total_refunds']
+current_repeat_rate = exec_kpis['repeat_rate'] if 'repeat_rate' in exec_kpis else 25.0
+
+# Estimate current return rate
+total_orders = len(base_filtered_orders)
+total_returns = len(base_filtered_returns)
+current_return_rate = (total_returns / total_orders * 100) if total_orders > 0 else 5.0
+
+# Current NPS (estimated based on OTD - industry benchmark)
+current_nps = 30 + (current_otd - 70) * 1.0  # Base NPS of 30 at 70% OTD
+
+# Active customers
+active_customers = len(base_filtered_customers)
+
+# Average Order Value
+aov = mgr_kpis['avg_order_value'] if mgr_kpis['avg_order_value'] > 0 else 500
+
+# Display current state
+current_col1, current_col2, current_col3, current_col4, current_col5 = st.columns(5)
+
+with current_col1:
+    st.metric("Current OTD Rate", f"{current_otd:.1f}%")
+
+with current_col2:
+    st.metric("Cancellation Rate", f"{current_cancel_rate:.1f}%")
+
+with current_col3:
+    st.metric("Return Rate", f"{current_return_rate:.1f}%")
+
+with current_col4:
+    st.metric("Est. NPS Score", f"{current_nps:.0f}")
+
+with current_col5:
+    st.metric("Repeat Rate", f"{current_repeat_rate:.1f}%")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+# ===== SINGLE DRIVER INPUT =====
+st.markdown("#### 🎯 Set Target On-Time Delivery Rate")
+
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    target_otd = st.slider(
+        "Target On-Time Delivery Rate (%)",
+        min_value=max(70.0, current_otd),
+        max_value=99.0,
+        value=min(current_otd + 10, 99.0),
+        step=0.5,
+        format="%.1f%%",
+        help="Slide to set your target OTD rate. All other metrics will auto-calculate."
+    )
+
+with col2:
+    # Calculate improvement
+    delta_otd = target_otd - current_otd
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📉 Reduce Cancellation Rate")
-        cancellation_reduction = st.slider(
-            "Reduction percentage:",
-            min_value=5, max_value=50, value=20, step=5,
-            format="%d%%", key="cancel_slider"
-        )
-        
-        current_cancelled = mgr_kpis['cancelled_orders']
-        reduced_cancellations = int(current_cancelled * (cancellation_reduction / 100))
-        recovered_revenue = reduced_cancellations * mgr_kpis['avg_order_value']
-        
+    if delta_otd > 0:
         st.markdown(f"""
         <div class='whatif-box'>
-            <p style='color: #e8e8e8;'>If cancellations reduced by <strong>{cancellation_reduction}%</strong>:</p>
-            <p style='color: #e8e8e8;'>Orders Recovered: <span class='whatif-value'>{reduced_cancellations:,}</span></p>
-            <p style='color: #e8e8e8;'>Additional Revenue: <span class='whatif-value'>{format_currency_short(recovered_revenue)}</span></p>
+            <p style='color: #8facc4; font-size: 0.9rem;'>Improvement Required</p>
+            <p class='whatif-value'>+{delta_otd:.1f}%</p>
+            <p style='color: #6b8aae; font-size: 0.8rem;'>OTD improvement</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("Increase target OTD to see projections")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+# ===== MATHEMATICAL MODEL COEFFICIENTS =====
+# These coefficients define the relationship between OTD and other metrics
+# Based on e-commerce industry research and benchmarks
+
+COEFFICIENTS = {
+    'cancel_reduction_per_otd': 0.04,      # 4% reduction in cancellation per 1% OTD improvement
+    'return_reduction_per_otd': 0.025,     # 2.5% reduction in returns per 1% OTD improvement
+    'nps_increase_per_otd': 1.5,           # 1.5 NPS points per 1% OTD improvement
+    'refund_reduction_per_otd': 0.05,      # 5% reduction in refunds per 1% OTD improvement
+    'repeat_increase_per_otd': 0.03,       # 3% increase in repeat rate per 1% OTD improvement
+    'investment_per_otd': 15000,           # AED 15,000 investment per 1% OTD improvement
+}
+
+# ===== CALCULATE PROJECTED METRICS =====
+if delta_otd > 0:
+    
+    # 1. New Cancellation Rate
+    cancel_multiplier = 1 - (COEFFICIENTS['cancel_reduction_per_otd'] * delta_otd)
+    new_cancel_rate = max(0, current_cancel_rate * cancel_multiplier)
+    cancel_reduction_pct = ((current_cancel_rate - new_cancel_rate) / current_cancel_rate * 100) if current_cancel_rate > 0 else 0
+    
+    # 2. New Return Rate
+    return_multiplier = 1 - (COEFFICIENTS['return_reduction_per_otd'] * delta_otd)
+    new_return_rate = max(0, current_return_rate * return_multiplier)
+    return_reduction_pct = ((current_return_rate - new_return_rate) / current_return_rate * 100) if current_return_rate > 0 else 0
+    
+    # 3. New NPS Score
+    new_nps = min(100, current_nps + (COEFFICIENTS['nps_increase_per_otd'] * delta_otd))
+    nps_increase = new_nps - current_nps
+    
+    # 4. New Refunds
+    refund_multiplier = 1 - (COEFFICIENTS['refund_reduction_per_otd'] * delta_otd)
+    new_refunds = max(0, current_refunds * refund_multiplier)
+    refund_savings = current_refunds - new_refunds
+    
+    # 5. New Repeat Rate
+    repeat_multiplier = 1 + (COEFFICIENTS['repeat_increase_per_otd'] * delta_otd)
+    new_repeat_rate = min(100, current_repeat_rate * repeat_multiplier)
+    repeat_increase_pct = new_repeat_rate - current_repeat_rate
+    
+    # ===== FINANCIAL CALCULATIONS =====
+    
+    # Orders recovered from reduced cancellations
+    cancelled_orders = mgr_kpis['cancelled_orders']
+    orders_recovered = int(cancelled_orders * (cancel_reduction_pct / 100))
+    revenue_recovered = orders_recovered * aov
+    
+    # Additional revenue from increased repeat purchases
+    additional_repeat_orders = int(active_customers * (repeat_increase_pct / 100))
+    repeat_revenue = additional_repeat_orders * aov
+    
+    # Total benefit
+    total_benefit = revenue_recovered + refund_savings + repeat_revenue
+    
+    # Investment required
+    investment_cost = delta_otd * COEFFICIENTS['investment_per_otd']
+    
+    # Net benefit and ROI
+    net_benefit = total_benefit - investment_cost
+    roi = ((total_benefit - investment_cost) / investment_cost * 100) if investment_cost > 0 else 0
+    
+    # ===== DISPLAY PROJECTED METRICS =====
+    st.markdown("#### 📊 Projected Metrics (Auto-Calculated)")
+    
+    # Create comparison cards
+    proj_col1, proj_col2, proj_col3, proj_col4, proj_col5 = st.columns(5)
+    
+    with proj_col1:
+        st.markdown(f"""
+        <div class='kpi-card' style='border-color: #4ade80;'>
+            <div class='kpi-label'>Target OTD Rate</div>
+            <div class='kpi-value' style='color: #4ade80;'>{target_otd:.1f}%</div>
+            <div class='kpi-subtitle' style='color: #4ade80;'>↑ +{delta_otd:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
     
-    with col2:
-        st.markdown("#### 🚚 Improve On-Time Delivery")
-        delivery_improvement = st.slider(
-            "Improvement percentage:",
-            min_value=5, max_value=30, value=15, step=5,
-            format="%d%%", key="delivery_slider"
-        )
-        
-        current_breaches = mgr_kpis['sla_breach_count']
-        reduced_breaches = int(current_breaches * (delivery_improvement / 100))
-        avg_refund = mgr_kpis['total_refunds'] / current_breaches if current_breaches > 0 else 50
-        cost_savings = reduced_breaches * avg_refund
-        new_on_time = min(100, mgr_kpis['on_time_rate'] + delivery_improvement)
-        
+    with proj_col2:
         st.markdown(f"""
-        <div class='whatif-box'>
-            <p style='color: #e8e8e8;'>If on-time delivery improves by <strong>{delivery_improvement}%</strong>:</p>
-            <p style='color: #e8e8e8;'>New On-Time Rate: <span class='whatif-value'>{new_on_time:.1f}%</span></p>
-            <p style='color: #e8e8e8;'>Breaches Avoided: <span class='whatif-value'>{reduced_breaches:,}</span></p>
-            <p style='color: #e8e8e8;'>Refund Savings: <span class='whatif-value'>{format_currency_short(cost_savings)}</span></p>
+        <div class='kpi-card' style='border-color: #4ade80;'>
+            <div class='kpi-label'>New Cancel Rate</div>
+            <div class='kpi-value' style='color: #4ade80;'>{new_cancel_rate:.1f}%</div>
+            <div class='kpi-subtitle' style='color: #4ade80;'>↓ -{cancel_reduction_pct:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
     
-    # Combined Impact
-    total_benefit = recovered_revenue + cost_savings
+    with proj_col3:
+        st.markdown(f"""
+        <div class='kpi-card' style='border-color: #4ade80;'>
+            <div class='kpi-label'>New Return Rate</div>
+            <div class='kpi-value' style='color: #4ade80;'>{new_return_rate:.1f}%</div>
+            <div class='kpi-subtitle' style='color: #4ade80;'>↓ -{return_reduction_pct:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
     
-    st.markdown(f"""
-    <div class='insight-box' style='border-left-color: #4ade80;'>
-        <div class='insight-title' style='color: #4ade80;'>💰 Total Projected Benefit</div>
-        <div style='text-align: center; padding: 20px;'>
-            <span style='font-size: 2.5rem; font-weight: bold; color: #4ade80;'>{format_currency_short(total_benefit)}</span>
-            <p style='color: #e8e8e8; margin-top: 15px;'>
-                Revenue Recovery: <strong>{format_currency_short(recovered_revenue)}</strong> | 
-                Cost Savings: <strong>{format_currency_short(cost_savings)}</strong>
+    with proj_col4:
+        st.markdown(f"""
+        <div class='kpi-card' style='border-color: #4ade80;'>
+            <div class='kpi-label'>New NPS Score</div>
+            <div class='kpi-value' style='color: #4ade80;'>{new_nps:.0f}</div>
+            <div class='kpi-subtitle' style='color: #4ade80;'>↑ +{nps_increase:.1f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with proj_col5:
+        st.markdown(f"""
+        <div class='kpi-card' style='border-color: #4ade80;'>
+            <div class='kpi-label'>New Repeat Rate</div>
+            <div class='kpi-value' style='color: #4ade80;'>{new_repeat_rate:.1f}%</div>
+            <div class='kpi-subtitle' style='color: #4ade80;'>↑ +{repeat_increase_pct:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== FINANCIAL IMPACT BREAKDOWN =====
+    st.markdown("#### 💰 Financial Impact Analysis")
+    
+    fin_col1, fin_col2 = st.columns(2)
+    
+    with fin_col1:
+        st.markdown("##### Revenue Gains")
+        
+        # Revenue breakdown table
+        revenue_data = {
+            'Source': [
+                'Recovered Orders (↓ Cancellations)',
+                'Repeat Purchases (↑ Retention)',
+                'Refund Savings (↓ Returns)'
+            ],
+            'Impact': [
+                f"{orders_recovered:,} orders",
+                f"{additional_repeat_orders:,} orders",
+                f"-{return_reduction_pct:.1f}% returns"
+            ],
+            'Value (AED)': [
+                f"{revenue_recovered:,.0f}",
+                f"{repeat_revenue:,.0f}",
+                f"{refund_savings:,.0f}"
+            ]
+        }
+        revenue_df = pd.DataFrame(revenue_data)
+        
+        st.dataframe(
+            revenue_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Source": st.column_config.TextColumn("Revenue Source"),
+                "Impact": st.column_config.TextColumn("Impact"),
+                "Value (AED)": st.column_config.TextColumn("Value (AED)")
+            }
+        )
+        
+        st.markdown(f"""
+        <div class='whatif-box'>
+            <p style='color: #8facc4;'>Total Projected Benefit</p>
+            <p class='whatif-value'>{format_currency_short(total_benefit)}</p>
+            <p style='color: #6b8aae; font-size: 0.85rem;'>Full: {format_currency_full(total_benefit)}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with fin_col2:
+        st.markdown("##### Investment & ROI")
+        
+        # Investment breakdown
+        st.markdown(f"""
+        <div class='insight-box'>
+            <p style='color: #e8e8e8;'><strong>Investment Required:</strong></p>
+            <p style='color: #fb923c; font-size: 1.5rem; font-weight: bold;'>{format_currency_short(investment_cost)}</p>
+            <p style='color: #8facc4; font-size: 0.85rem;'>
+                Based on AED {COEFFICIENTS['investment_per_otd']:,} per 1% OTD improvement<br>
+                (Covers: logistics optimization, staffing, technology upgrades)
             </p>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
+        # ROI Box
+        roi_color = '#4ade80' if roi > 0 else '#f87171'
+        net_color = '#4ade80' if net_benefit > 0 else '#f87171'
+        
+        st.markdown(f"""
+        <div class='kpi-card' style='border-color: {roi_color};'>
+            <div class='kpi-label'>Return on Investment</div>
+            <div class='kpi-value' style='color: {roi_color};'>{roi:.0f}%</div>
+            <div class='kpi-subtitle'>Net Benefit: <span style='color: {net_color};'>{format_currency_short(net_benefit)}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== VISUALIZATION: BEFORE VS AFTER =====
+    st.markdown("#### 📊 Before vs After Comparison")
+    
+    viz_col1, viz_col2 = st.columns(2)
+    
+    with viz_col1:
+        # Metrics comparison bar chart
+        comparison_data = pd.DataFrame({
+            'Metric': ['OTD Rate', 'Cancel Rate', 'Return Rate', 'Repeat Rate'],
+            'Current': [current_otd, current_cancel_rate, current_return_rate, current_repeat_rate],
+            'Projected': [target_otd, new_cancel_rate, new_return_rate, new_repeat_rate]
+        })
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Bar(
+            name='Current',
+            x=comparison_data['Metric'],
+            y=comparison_data['Current'],
+            marker_color='#3a86ff',
+            text=[f"{v:.1f}%" for v in comparison_data['Current']],
+            textposition='outside'
+        ))
+        
+        fig.add_trace(go.Bar(
+            name='Projected',
+            x=comparison_data['Metric'],
+            y=comparison_data['Projected'],
+            marker_color='#4ade80',
+            text=[f"{v:.1f}%" for v in comparison_data['Projected']],
+            textposition='outside'
+        ))
+        
+        fig.update_layout(
+            title='Operational Metrics: Current vs Projected',
+            barmode='group',
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#e8e8e8',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, bgcolor='rgba(0,0,0,0)'),
+            xaxis=dict(gridcolor='rgba(58,134,255,0.1)'),
+            yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Percentage (%)'),
+            margin=dict(l=0, r=0, t=60, b=0)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with viz_col2:
+        # Financial impact waterfall
+        waterfall_data = {
+            'Category': ['Revenue<br>Recovered', 'Repeat<br>Revenue', 'Refund<br>Savings', 
+                        'Investment', 'Net<br>Benefit'],
+            'Amount': [revenue_recovered, repeat_revenue, refund_savings, 
+                      -investment_cost, net_benefit],
+            'Type': ['gain', 'gain', 'gain', 'cost', 'total']
+        }
+        
+        colors = []
+        for t in waterfall_data['Type']:
+            if t == 'gain':
+                colors.append('#4ade80')
+            elif t == 'cost':
+                colors.append('#f87171')
+            else:
+                colors.append('#3a86ff')
+        
+        fig = go.Figure(go.Waterfall(
+            name="Financial Impact",
+            orientation="v",
+            x=waterfall_data['Category'],
+            y=waterfall_data['Amount'],
+            connector={"line": {"color": "#8facc4"}},
+            decreasing={"marker": {"color": "#f87171"}},
+            increasing={"marker": {"color": "#4ade80"}},
+            totals={"marker": {"color": "#3a86ff"}},
+            text=[f"AED {abs(v):,.0f}" for v in waterfall_data['Amount']],
+            textposition="outside"
+        ))
+        
+        fig.update_layout(
+            title='Financial Impact Waterfall',
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#e8e8e8',
+            xaxis=dict(gridcolor='rgba(58,134,255,0.1)'),
+            yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Amount (AED)'),
+            margin=dict(l=0, r=0, t=60, b=0),
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== SENSITIVITY ANALYSIS =====
+    st.markdown("#### 📈 Sensitivity Analysis")
+    st.caption("How does the ROI change at different OTD improvement levels?")
+    
+    # Calculate ROI at different improvement levels
+    sensitivity_data = []
+    for otd_improvement in range(1, 21):
+        test_otd = current_otd + otd_improvement
+        if test_otd > 99:
+            break
+        
+        # Calculate metrics at this level
+        test_cancel_reduction = current_cancel_rate * COEFFICIENTS['cancel_reduction_per_otd'] * otd_improvement
+        test_orders_recovered = int(cancelled_orders * (test_cancel_reduction / current_cancel_rate)) if current_cancel_rate > 0 else 0
+        test_revenue = test_orders_recovered * aov
+        
+        test_repeat_increase = current_repeat_rate * COEFFICIENTS['repeat_increase_per_otd'] * otd_improvement
+        test_repeat_orders = int(active_customers * (test_repeat_increase / 100))
+        test_repeat_revenue = test_repeat_orders * aov
+        
+        test_refund_savings = current_refunds * COEFFICIENTS['refund_reduction_per_otd'] * otd_improvement
+        
+        test_total_benefit = test_revenue + test_repeat_revenue + test_refund_savings
+        test_investment = otd_improvement * COEFFICIENTS['investment_per_otd']
+        test_roi = ((test_total_benefit - test_investment) / test_investment * 100) if test_investment > 0 else 0
+        test_net = test_total_benefit - test_investment
+        
+        sensitivity_data.append({
+            'OTD Improvement': f"+{otd_improvement}%",
+            'Target OTD': f"{test_otd:.1f}%",
+            'Investment': test_investment,
+            'Total Benefit': test_total_benefit,
+            'Net Benefit': test_net,
+            'ROI': test_roi
+        })
+    
+    sensitivity_df = pd.DataFrame(sensitivity_data)
+    
+    # ROI curve chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=[d['OTD Improvement'] for d in sensitivity_data],
+        y=[d['ROI'] for d in sensitivity_data],
+        mode='lines+markers',
+        name='ROI %',
+        line=dict(color='#3a86ff', width=3),
+        marker=dict(size=8)
+    ))
+    
+    # Add break-even line
+    fig.add_hline(y=0, line_dash="dash", line_color="#fb923c", 
+                  annotation_text="Break-Even", annotation_position="right")
+    
+    # Highlight current selection
+    current_idx = int(delta_otd) - 1 if delta_otd >= 1 else 0
+    if current_idx < len(sensitivity_data):
+        fig.add_trace(go.Scatter(
+            x=[sensitivity_data[current_idx]['OTD Improvement']],
+            y=[sensitivity_data[current_idx]['ROI']],
+            mode='markers',
+            name='Your Target',
+            marker=dict(size=15, color='#4ade80', symbol='star')
+        ))
+    
+    fig.update_layout(
+        title='ROI Sensitivity to OTD Improvement',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='#e8e8e8',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, bgcolor='rgba(0,0,0,0)'),
+        xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='OTD Improvement'),
+        yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='ROI (%)'),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Sensitivity table
+    with st.expander("📋 View Detailed Sensitivity Table"):
+        display_df = sensitivity_df.copy()
+        display_df['Investment'] = display_df['Investment'].apply(lambda x: f"AED {x:,.0f}")
+        display_df['Total Benefit'] = display_df['Total Benefit'].apply(lambda x: f"AED {x:,.0f}")
+        display_df['Net Benefit'] = display_df['Net Benefit'].apply(lambda x: f"AED {x:,.0f}")
+        display_df['ROI'] = display_df['ROI'].apply(lambda x: f"{x:.1f}%")
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== MODEL ASSUMPTIONS =====
+    with st.expander("📐 View Model Equations & Assumptions"):
+        st.markdown("""
+        ### Mathematical Relationships
+        
+        **Single Driver:** On-Time Delivery Rate (OTD)
+        
+        **Derived Equations:**
+        
+        | Metric | Formula | Coefficient |
+        |--------|---------|-------------|
+        | Cancellation Rate | `New = Current × (1 - 0.04 × ΔOTD)` | -4% per 1% OTD |
+        | Return Rate | `New = Current × (1 - 0.025 × ΔOTD)` | -2.5% per 1% OTD |
+        | NPS Score | `New = Current + (1.5 × ΔOTD)` | +1.5 per 1% OTD |
+        | Refunds | `New = Current × (1 - 0.05 × ΔOTD)` | -5% per 1% OTD |
+        | Repeat Rate | `New = Current × (1 + 0.03 × ΔOTD)` | +3% per 1% OTD |
+        
+        **Financial Impact:**
+        
+        ```
+        Revenue Recovered = Orders Saved × Average Order Value
+        Repeat Revenue = Additional Repeat Orders × Average Order Value
+        Total Benefit = Revenue Recovered + Repeat Revenue + Refund Savings
+        Investment = ΔOTD × AED 15,000
+        Net Benefit = Total Benefit - Investment
+        ROI = (Total Benefit - Investment) / Investment × 100%
+        ```
+        
+        **Assumptions:**
+        1. Linear relationships within the modeled range
+        2. Investment cost of AED 15,000 per 1% OTD improvement
+        3. Coefficients based on e-commerce industry benchmarks
+        4. No external market factors considered
+        5. Customer behavior responds predictably to service improvements
+        """)
+
+else:
+    st.info("👆 Increase the target OTD rate above the current rate to see projections.")
 
 # ================================================================================
 # FOOTER
