@@ -1,6 +1,6 @@
 """
 ================================================================================
-SOUQPLUS ANALYTICS DASHBOARD
+SOUQPLUS ANALYTICS DASHBOARD - UPDATED WITH PROFESSOR FEEDBACK
 ================================================================================
 UAE Premium E-Commerce Intelligence Platform
 Developed by: Group 1 | Master of AI in Business | SP Jain
@@ -75,6 +75,7 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         transition: transform 0.3s ease;
+        cursor: help;
     }
     
     .kpi-card:hover {
@@ -97,14 +98,10 @@ st.markdown("""
         letter-spacing: 2px;
     }
     
-    .kpi-delta-positive {
-        color: #4ade80;
-        font-size: 0.85rem;
-    }
-    
-    .kpi-delta-negative {
-        color: #f87171;
-        font-size: 0.85rem;
+    .kpi-subtitle {
+        color: #6b8aae;
+        font-size: 0.75rem;
+        margin-top: 5px;
     }
     
     .insight-box {
@@ -150,6 +147,34 @@ st.markdown("""
         border: 1px solid #2a4a7f;
     }
     
+    .filter-container {
+        background: rgba(58, 134, 255, 0.05);
+        border: 1px solid #2a4a7f;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+    }
+    
+    .filter-label {
+        color: #8facc4;
+        font-size: 0.8rem;
+        margin-bottom: 5px;
+    }
+    
+    .breach-breakdown {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid #f87171;
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+    
+    .breach-item {
+        color: #e8e8e8;
+        font-size: 0.8rem;
+        padding: 3px 0;
+    }
+    
     .tier-bronze { color: #cd7f32; }
     .tier-silver { color: #c0c0c0; }
     .tier-gold { color: #ffd700; }
@@ -158,7 +183,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ================================================================================
-# DATA LOADING AND CLEANING (COMPREHENSIVE - WITH SAFE COLUMN CHECKS)
+# HELPER FUNCTIONS
+# ================================================================================
+
+def format_number_short(num):
+    """Format number in shortened format (e.g., 2.2M, 150K)"""
+    if num >= 1_000_000:
+        return f"{num/1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"{num/1_000:.1f}K"
+    else:
+        return f"{num:.0f}"
+
+def format_currency_short(num):
+    """Format currency in shortened format with AED"""
+    if num >= 1_000_000:
+        return f"AED {num/1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"AED {num/1_000:.1f}K"
+    else:
+        return f"AED {num:.0f}"
+
+def format_currency_full(num):
+    """Format currency with full number"""
+    return f"AED {num:,.2f}"
+
+# ================================================================================
+# DATA LOADING AND CLEANING
 # ================================================================================
 
 @st.cache_data
@@ -171,7 +222,7 @@ def load_and_clean_data():
         fulfillment = pd.read_csv('fulfillment.csv')
         returns = pd.read_csv('returns.csv')
         
-        # ===== 1. REMOVE DUPLICATES (Safe method) =====
+        # ===== 1. REMOVE DUPLICATES =====
         if 'customer_id' in customers.columns:
             customers = customers.drop_duplicates(subset=['customer_id'], keep='first')
         else:
@@ -182,7 +233,6 @@ def load_and_clean_data():
         else:
             orders = orders.drop_duplicates(keep='first')
         
-        # For order_items - check which columns exist
         if 'order_item_id' in order_items.columns:
             order_items = order_items.drop_duplicates(subset=['order_item_id'], keep='first')
         elif 'item_id' in order_items.columns:
@@ -190,7 +240,6 @@ def load_and_clean_data():
         else:
             order_items = order_items.drop_duplicates(keep='first')
         
-        # For fulfillment - check which columns exist
         if 'fulfillment_id' in fulfillment.columns:
             fulfillment = fulfillment.drop_duplicates(subset=['fulfillment_id'], keep='first')
         elif 'order_id' in fulfillment.columns:
@@ -198,7 +247,6 @@ def load_and_clean_data():
         else:
             fulfillment = fulfillment.drop_duplicates(keep='first')
         
-        # For returns - check which columns exist
         if 'return_id' in returns.columns:
             returns = returns.drop_duplicates(subset=['return_id'], keep='first')
         else:
@@ -284,7 +332,7 @@ def load_and_clean_data():
         if 'discount_amount' in orders.columns:
             orders['discount_amount'] = orders['discount_amount'].abs()
         
-        # ===== 8. HANDLE OUTLIERS (Orders > AED 10,000) =====
+        # ===== 8. HANDLE OUTLIERS =====
         if 'net_amount' in orders.columns:
             revenue_cap = orders['net_amount'].quantile(0.99)
             orders['net_amount_capped'] = orders['net_amount'].clip(upper=revenue_cap)
@@ -321,11 +369,10 @@ def load_and_clean_data():
         
     except FileNotFoundError as e:
         st.error(f"Data file not found: {e}")
-        st.info("Please ensure all CSV files (customers.csv, orders.csv, order_items.csv, fulfillment.csv, returns.csv) are in the same directory.")
+        st.info("Please ensure all CSV files are in the same directory.")
         st.stop()
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        st.info(f"Details: {str(e)}")
         st.stop()
 
 # Load data
@@ -349,7 +396,7 @@ CHART_COLORS = ['#3a86ff', '#4cc9f0', '#4ade80', '#fb923c', '#f87171', '#a78bfa'
 TIER_COLORS = {'Bronze': '#cd7f32', 'Silver': '#c0c0c0', 'Gold': '#ffd700', 'Platinum': '#e5e4e2'}
 
 # ================================================================================
-# SIDEBAR - FILTERS
+# SIDEBAR - GLOBAL FILTERS (Date Range & View Toggle Only)
 # ================================================================================
 
 st.sidebar.markdown("""
@@ -361,7 +408,7 @@ st.sidebar.markdown("""
 
 st.sidebar.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-# ===== VIEW TOGGLE (MANDATORY - HEAVILY GRADED) =====
+# ===== VIEW TOGGLE =====
 st.sidebar.markdown("### 📊 Dashboard View")
 view_mode = st.sidebar.radio(
     "Select View",
@@ -371,14 +418,13 @@ view_mode = st.sidebar.radio(
 )
 
 st.sidebar.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("### 🎯 Filters")
 
-# ===== FILTER 1: DATE RANGE =====
-st.sidebar.markdown("**📅 Date Range**")
+# ===== GLOBAL DATE FILTER ONLY =====
+st.sidebar.markdown("### 📅 Date Range")
+st.sidebar.caption("Global filter applied to all charts")
+
 min_date = orders_df['order_date'].min().date()
 max_date = orders_df['order_date'].max().date()
-
-# Default to last 90 days
 default_start = max(min_date, max_date - timedelta(days=90))
 
 col1, col2 = st.sidebar.columns(2)
@@ -387,153 +433,43 @@ with col1:
 with col2:
     end_date = st.date_input("To", max_date, min_value=min_date, max_value=max_date)
 
-# ===== FILTER 2: CITY =====
-st.sidebar.markdown("**🏙️ City**")
-available_cities = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah']
-city_options = [c for c in available_cities if c in customers_df['city'].unique()]
-if not city_options:
-    city_options = list(customers_df['city'].unique())
-selected_cities = st.sidebar.multiselect(
-    "Select Cities",
-    options=city_options,
-    default=city_options
-)
-
-# ===== FILTER 3: ORDER CHANNEL =====
-st.sidebar.markdown("**📱 Order Channel**")
-channel_options = list(orders_df['order_channel'].unique()) if 'order_channel' in orders_df.columns else ['App', 'Web', 'Call Center']
-selected_channels = st.sidebar.multiselect(
-    "Select Channels",
-    options=channel_options,
-    default=channel_options
-)
-
-# ===== FILTER 4: PRODUCT CATEGORY =====
-st.sidebar.markdown("**🛍️ Product Category**")
-category_options = list(order_items_df['product_category'].unique()) if 'product_category' in order_items_df.columns else []
-selected_categories = st.sidebar.multiselect(
-    "Select Categories",
-    options=category_options,
-    default=category_options
-)
-
-# ===== FILTER 5: CUSTOMER SEGMENT =====
-st.sidebar.markdown("**👥 Customer Segment**")
-segment_options = list(customers_df['customer_segment'].unique()) if 'customer_segment' in customers_df.columns else ['Regular', 'Premium', 'VIP']
-selected_segments = st.sidebar.multiselect(
-    "Select Segments",
-    options=segment_options,
-    default=segment_options
-)
-
-# ===== FILTER 6: ORDER STATUS =====
-st.sidebar.markdown("**📦 Order Status**")
-status_options = list(orders_df['order_status'].unique()) if 'order_status' in orders_df.columns else ['Delivered', 'Cancelled', 'Returned', 'In Transit']
-selected_statuses = st.sidebar.multiselect(
-    "Select Statuses",
-    options=status_options,
-    default=status_options
-)
-
-# ===== FILTER 7: CUSTOMER TIER (OPTIONAL BONUS) =====
-st.sidebar.markdown("**👑 Customer Tier (Bonus)**")
-tier_options = ['Bronze', 'Silver', 'Gold', 'Platinum']
-selected_tiers = st.sidebar.multiselect(
-    "Select Tiers",
-    options=tier_options,
-    default=tier_options
-)
+st.sidebar.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.sidebar.markdown("### ℹ️ About Local Filters")
+st.sidebar.info("Each chart has its own filter controls for granular analysis. Look for filter dropdowns above each visualization.")
 
 # ================================================================================
-# APPLY FILTERS
+# BASE FILTERED DATA (Date Only)
 # ================================================================================
 
-# Filter orders by date
-filtered_orders = orders_df[
+base_filtered_orders = orders_df[
     (orders_df['order_date'].dt.date >= start_date) &
     (orders_df['order_date'].dt.date <= end_date)
 ].copy()
 
-# Calculate previous period for comparison
-period_length = (end_date - start_date).days
-prev_start = start_date - timedelta(days=period_length)
-prev_end = start_date - timedelta(days=1)
-
-previous_orders = orders_df[
-    (orders_df['order_date'].dt.date >= prev_start) &
-    (orders_df['order_date'].dt.date <= prev_end)
-].copy()
-
-# Filter by city
-if selected_cities and 'city' in customers_df.columns:
-    city_customers = customers_df[customers_df['city'].isin(selected_cities)]['customer_id']
-    filtered_orders = filtered_orders[filtered_orders['customer_id'].isin(city_customers)]
-    previous_orders = previous_orders[previous_orders['customer_id'].isin(city_customers)]
-
-# Filter by channel
-if selected_channels and 'order_channel' in filtered_orders.columns:
-    filtered_orders = filtered_orders[filtered_orders['order_channel'].isin(selected_channels)]
-    previous_orders = previous_orders[previous_orders['order_channel'].isin(selected_channels)]
-
-# Filter by customer segment
-if selected_segments and 'customer_segment' in customers_df.columns:
-    segment_customers = customers_df[customers_df['customer_segment'].isin(selected_segments)]['customer_id']
-    filtered_orders = filtered_orders[filtered_orders['customer_id'].isin(segment_customers)]
-    previous_orders = previous_orders[previous_orders['customer_id'].isin(segment_customers)]
-
-# Filter by order status
-if selected_statuses and 'order_status' in filtered_orders.columns:
-    filtered_orders = filtered_orders[filtered_orders['order_status'].isin(selected_statuses)]
-    previous_orders = previous_orders[previous_orders['order_status'].isin(selected_statuses)]
-
-# Filter by customer tier
-if selected_tiers and 'customer_tier' in customers_df.columns:
-    tier_customers = customers_df[customers_df['customer_tier'].isin(selected_tiers)]['customer_id']
-    filtered_orders = filtered_orders[filtered_orders['customer_id'].isin(tier_customers)]
-    previous_orders = previous_orders[previous_orders['customer_id'].isin(tier_customers)]
-
-# Filter order items by category
-filtered_order_items = order_items_df[order_items_df['order_id'].isin(filtered_orders['order_id'])]
-if selected_categories and 'product_category' in filtered_order_items.columns:
-    filtered_order_items = filtered_order_items[filtered_order_items['product_category'].isin(selected_categories)]
-    filtered_orders = filtered_orders[filtered_orders['order_id'].isin(filtered_order_items['order_id'])]
-
-# Get related filtered data
-filtered_customer_ids = filtered_orders['customer_id'].unique()
-filtered_customers = customers_df[customers_df['customer_id'].isin(filtered_customer_ids)]
-filtered_fulfillment = fulfillment_df[fulfillment_df['order_id'].isin(filtered_orders['order_id'])]
-filtered_returns = returns_df[returns_df['order_id'].isin(filtered_orders['order_id'])]
+base_filtered_customer_ids = base_filtered_orders['customer_id'].unique()
+base_filtered_customers = customers_df[customers_df['customer_id'].isin(base_filtered_customer_ids)]
+base_filtered_order_items = order_items_df[order_items_df['order_id'].isin(base_filtered_orders['order_id'])]
+base_filtered_fulfillment = fulfillment_df[fulfillment_df['order_id'].isin(base_filtered_orders['order_id'])]
+base_filtered_returns = returns_df[returns_df['order_id'].isin(base_filtered_orders['order_id'])]
 
 # ================================================================================
 # KPI CALCULATIONS
 # ================================================================================
 
-def calculate_executive_kpis(orders, previous_orders):
-    """Calculate Executive View KPIs with period comparison"""
+def calculate_executive_kpis(orders):
+    """Calculate Executive View KPIs"""
     kpis = {}
     
-    # Check for order_status column
     if 'order_status' in orders.columns:
         delivered_orders = orders[orders['order_status'] == 'Delivered']
-        prev_delivered = previous_orders[previous_orders['order_status'] == 'Delivered'] if len(previous_orders) > 0 else pd.DataFrame()
     else:
         delivered_orders = orders
-        prev_delivered = previous_orders
     
-    # Total Revenue
+    # Total Revenue (full value stored for hover)
     kpis['total_revenue'] = delivered_orders['net_amount'].sum() if 'net_amount' in delivered_orders.columns else 0
-    prev_revenue = prev_delivered['net_amount'].sum() if len(prev_delivered) > 0 and 'net_amount' in prev_delivered.columns else 0
-    
-    # Revenue % change vs previous period
-    if prev_revenue > 0:
-        kpis['revenue_change'] = ((kpis['total_revenue'] - prev_revenue) / prev_revenue) * 100
-    else:
-        kpis['revenue_change'] = 0
     
     # Average Order Value
     kpis['aov'] = delivered_orders['net_amount'].mean() if len(delivered_orders) > 0 and 'net_amount' in delivered_orders.columns else 0
-    prev_aov = prev_delivered['net_amount'].mean() if len(prev_delivered) > 0 and 'net_amount' in prev_delivered.columns else 0
-    kpis['aov_change'] = ((kpis['aov'] - prev_aov) / prev_aov * 100) if prev_aov > 0 else 0
     
     # Repeat Customer Rate
     if 'customer_id' in orders.columns:
@@ -552,27 +488,51 @@ def calculate_executive_kpis(orders, previous_orders):
     else:
         kpis['discount_rate'] = 0
     
-    # Additional metrics
     kpis['total_orders'] = len(orders)
     kpis['delivered_count'] = len(delivered_orders)
     
     return kpis
 
 def calculate_manager_kpis(orders, fulfillment, returns):
-    """Calculate Manager View KPIs"""
+    """Calculate Manager View KPIs with SLA Breach Breakdown"""
     kpis = {}
     
-    # On-Time Delivery Rate
+    # On-Time Delivery Rate & SLA Breach Details
     if 'actual_delivery_date' in fulfillment.columns and 'promised_date' in fulfillment.columns:
         delivered_fulfillment = fulfillment[fulfillment['actual_delivery_date'].notna()]
         on_time = delivered_fulfillment[
             delivered_fulfillment['actual_delivery_date'] <= delivered_fulfillment['promised_date']
         ]
+        late = delivered_fulfillment[
+            delivered_fulfillment['actual_delivery_date'] > delivered_fulfillment['promised_date']
+        ]
+        
         kpis['on_time_rate'] = (len(on_time) / len(delivered_fulfillment) * 100) if len(delivered_fulfillment) > 0 else 0
-        kpis['sla_breach_count'] = len(delivered_fulfillment) - len(on_time)
+        kpis['sla_breach_count'] = len(late)
+        
+        # SLA BREACH BREAKDOWN by Zone, Partner, Reason
+        kpis['breach_by_zone'] = {}
+        kpis['breach_by_partner'] = {}
+        kpis['breach_by_reason'] = {}
+        
+        if len(late) > 0:
+            if 'delivery_zone' in late.columns:
+                zone_breaches = late['delivery_zone'].value_counts().head(3).to_dict()
+                kpis['breach_by_zone'] = zone_breaches
+            
+            if 'delivery_partner' in late.columns:
+                partner_breaches = late['delivery_partner'].value_counts().head(3).to_dict()
+                kpis['breach_by_partner'] = partner_breaches
+            
+            if 'delay_reason' in late.columns:
+                reason_breaches = late[late['delay_reason'] != 'No Delay']['delay_reason'].value_counts().head(3).to_dict()
+                kpis['breach_by_reason'] = reason_breaches
     else:
         kpis['on_time_rate'] = 0
         kpis['sla_breach_count'] = 0
+        kpis['breach_by_zone'] = {}
+        kpis['breach_by_partner'] = {}
+        kpis['breach_by_reason'] = {}
     
     # Cancellation Rate
     if 'order_status' in orders.columns:
@@ -585,7 +545,7 @@ def calculate_manager_kpis(orders, fulfillment, returns):
         kpis['cancelled_orders'] = 0
         kpis['delivered_orders'] = 0
     
-    # Total Refund Amount
+    # Total Refunds
     if 'refund_status' in returns.columns and 'refund_amount' in returns.columns:
         kpis['total_refunds'] = returns[returns['refund_status'] == 'Processed']['refund_amount'].sum()
     elif 'refund_amount' in returns.columns:
@@ -593,15 +553,18 @@ def calculate_manager_kpis(orders, fulfillment, returns):
     else:
         kpis['total_refunds'] = 0
     
-    # Additional metrics
     kpis['total_orders'] = len(orders)
     kpis['avg_order_value'] = orders['net_amount'].mean() if len(orders) > 0 and 'net_amount' in orders.columns else 0
     
     return kpis
 
 # Calculate KPIs
-exec_kpis = calculate_executive_kpis(filtered_orders, previous_orders)
-mgr_kpis = calculate_manager_kpis(filtered_orders, filtered_fulfillment, filtered_returns)
+exec_kpis = calculate_executive_kpis(base_filtered_orders)
+mgr_kpis = calculate_manager_kpis(base_filtered_orders, base_filtered_fulfillment, base_filtered_returns)
+
+# Calculate Refund as % of Revenue
+total_revenue_for_refund = exec_kpis['total_revenue']
+refund_percentage = (mgr_kpis['total_refunds'] / total_revenue_for_refund * 100) if total_revenue_for_refund > 0 else 0
 
 # ================================================================================
 # MAIN HEADER
@@ -617,6 +580,9 @@ st.markdown(f"""
     <p style='color: #8facc4; font-size: 1rem; letter-spacing: 2px;'>
         UAE E-COMMERCE INTELLIGENCE | {view_label} VIEW
     </p>
+    <p style='color: #6b8aae; font-size: 0.85rem;'>
+        📅 {start_date.strftime('%b %d, %Y')} - {end_date.strftime('%b %d, %Y')}
+    </p>
 </div>
 <div class='divider'></div>
 """, unsafe_allow_html=True)
@@ -627,95 +593,119 @@ st.markdown(f"""
 
 if view_mode == "Executive View":
     
-    # ===== 4 KPI CARDS =====
+    # ===== 4 KPI CARDS (Clean - No Deltas) =====
     st.markdown("### 📈 Key Performance Indicators")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        change_class = 'kpi-delta-positive' if exec_kpis['revenue_change'] >= 0 else 'kpi-delta-negative'
-        change_symbol = '▲' if exec_kpis['revenue_change'] >= 0 else '▼'
+        # Total Revenue - Shortened format with hover showing full amount
+        revenue_short = format_currency_short(exec_kpis['total_revenue'])
+        revenue_full = format_currency_full(exec_kpis['total_revenue'])
         st.markdown(f"""
-        <div class='kpi-card'>
+        <div class='kpi-card' title='Full Amount: {revenue_full}'>
             <div class='kpi-label'>Total Revenue</div>
-            <div class='kpi-value'>AED {exec_kpis['total_revenue']:,.0f}</div>
-            <div class='{change_class}'>{change_symbol} {abs(exec_kpis['revenue_change']):.1f}% vs previous period</div>
+            <div class='kpi-value'>{revenue_short}</div>
+            <div class='kpi-subtitle'>Hover for full amount</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        aov_class = 'kpi-delta-positive' if exec_kpis['aov_change'] >= 0 else 'kpi-delta-negative'
-        aov_symbol = '▲' if exec_kpis['aov_change'] >= 0 else '▼'
         st.markdown(f"""
-        <div class='kpi-card'>
+        <div class='kpi-card' title='Average Order Value: {format_currency_full(exec_kpis["aov"])}'>
             <div class='kpi-label'>Average Order Value</div>
             <div class='kpi-value'>AED {exec_kpis['aov']:,.0f}</div>
-            <div class='{aov_class}'>{aov_symbol} {abs(exec_kpis['aov_change']):.1f}% vs previous</div>
+            <div class='kpi-subtitle'>{exec_kpis['delivered_count']:,} delivered orders</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        rate_class = 'kpi-delta-positive' if exec_kpis['repeat_rate'] > 30 else 'kpi-delta-negative'
         st.markdown(f"""
         <div class='kpi-card'>
             <div class='kpi-label'>Repeat Customer Rate</div>
             <div class='kpi-value'>{exec_kpis['repeat_rate']:.1f}%</div>
-            <div class='{rate_class}'>{'Strong Loyalty' if exec_kpis['repeat_rate'] > 30 else 'Needs Improvement'}</div>
+            <div class='kpi-subtitle'>Customers with 2+ orders</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        disc_class = 'kpi-delta-positive' if exec_kpis['discount_rate'] < 15 else 'kpi-delta-negative'
         st.markdown(f"""
         <div class='kpi-card'>
             <div class='kpi-label'>Discount Rate</div>
             <div class='kpi-value'>{exec_kpis['discount_rate']:.1f}%</div>
-            <div class='{disc_class}'>{'Healthy Margin' if exec_kpis['discount_rate'] < 15 else 'High Burn Rate'}</div>
+            <div class='kpi-subtitle'>Of gross revenue</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== CHART 1 & 2 =====
+    # ===== CHART 1: REVENUE TREND (with local filter) =====
+    st.markdown("### 📊 Revenue Trend")
+    
+    # LOCAL FILTER for Revenue Trend
+    rev_col1, rev_col2, rev_col3 = st.columns([1, 1, 2])
+    
+    with rev_col1:
+        rev_agg_type = st.selectbox("Aggregation", ["Weekly", "Monthly"], key="rev_trend_agg")
+    
+    with rev_col2:
+        rev_channel_options = ['All Channels'] + list(base_filtered_orders['order_channel'].unique()) if 'order_channel' in base_filtered_orders.columns else ['All Channels']
+        rev_channel_filter = st.selectbox("Channel", rev_channel_options, key="rev_trend_channel")
+    
+    # Apply local filter
+    rev_trend_data = base_filtered_orders.copy()
+    if rev_channel_filter != 'All Channels' and 'order_channel' in rev_trend_data.columns:
+        rev_trend_data = rev_trend_data[rev_trend_data['order_channel'] == rev_channel_filter]
+    
+    if 'order_status' in rev_trend_data.columns:
+        delivered = rev_trend_data[rev_trend_data['order_status'] == 'Delivered'].copy()
+    else:
+        delivered = rev_trend_data.copy()
+    
+    if len(delivered) > 0 and 'net_amount' in delivered.columns:
+        if rev_agg_type == "Weekly":
+            delivered['period'] = delivered['order_date'].dt.to_period('W').apply(lambda x: x.start_time)
+        else:
+            delivered['period'] = delivered['order_date'].dt.to_period('M').apply(lambda x: x.start_time)
+        
+        revenue_trend = delivered.groupby('period')['net_amount'].sum().reset_index()
+        revenue_trend.columns = ['Date', 'Revenue']
+        
+        fig = px.line(revenue_trend, x='Date', y='Revenue', markers=True,
+                     color_discrete_sequence=[COLORS['primary']])
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#e8e8e8',
+            xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title=''),
+            yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Revenue (AED)'),
+            margin=dict(l=0, r=0, t=20, b=0)
+        )
+        fig.update_traces(line=dict(width=3), marker=dict(size=8))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No delivered orders in selected period.")
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== CHART 2 & 3: Revenue by City & Channel Contribution =====
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📊 Revenue Trend")
-        agg_type = st.radio("View by", ["Weekly", "Monthly"], horizontal=True, key="rev_agg")
-        
-        if 'order_status' in filtered_orders.columns:
-            delivered = filtered_orders[filtered_orders['order_status'] == 'Delivered'].copy()
-        else:
-            delivered = filtered_orders.copy()
-        
-        if len(delivered) > 0 and 'net_amount' in delivered.columns:
-            if agg_type == "Weekly":
-                delivered['period'] = delivered['order_date'].dt.to_period('W').apply(lambda x: x.start_time)
-            else:  # Monthly
-                delivered['period'] = delivered['order_date'].dt.to_period('M').apply(lambda x: x.start_time)
-            
-            revenue_trend = delivered.groupby('period')['net_amount'].sum().reset_index()
-            revenue_trend.columns = ['Date', 'Revenue']
-            
-            fig = px.line(revenue_trend, x='Date', y='Revenue', markers=True,
-                         color_discrete_sequence=[COLORS['primary']])
-            fig.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                font_color='#e8e8e8',
-                xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title=''),
-                yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Revenue (AED)'),
-                margin=dict(l=0, r=0, t=20, b=0)
-            )
-            fig.update_traces(line=dict(width=3), marker=dict(size=8))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No delivered orders in selected period.")
-    
-    with col2:
         st.markdown("### 🏙️ Revenue by City")
         
+        # LOCAL FILTER for City Chart
+        city_segment_options = ['All Segments'] + list(customers_df['customer_segment'].unique()) if 'customer_segment' in customers_df.columns else ['All Segments']
+        city_segment_filter = st.selectbox("Customer Segment", city_segment_options, key="city_segment_filter")
+        
+        # Apply local filter
+        city_filtered_customers = base_filtered_customers.copy()
+        if city_segment_filter != 'All Segments' and 'customer_segment' in city_filtered_customers.columns:
+            city_filtered_customers = city_filtered_customers[city_filtered_customers['customer_segment'] == city_segment_filter]
+        
+        city_filtered_orders = base_filtered_orders[base_filtered_orders['customer_id'].isin(city_filtered_customers['customer_id'])]
+        
         if 'city' in customers_df.columns:
-            city_revenue = filtered_orders.merge(customers_df[['customer_id', 'city']], on='customer_id')
+            city_revenue = city_filtered_orders.merge(customers_df[['customer_id', 'city']], on='customer_id')
             if 'order_status' in city_revenue.columns:
                 city_revenue = city_revenue[city_revenue['order_status'] == 'Delivered']
             
@@ -739,20 +729,24 @@ if view_mode == "Executive View":
         else:
             st.info("City data not available.")
     
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-    
-    # ===== CHART 3 & 4 =====
-    col1, col2 = st.columns(2)
-    
-    with col1:
+    with col2:
         st.markdown("### 📱 Channel Contribution")
         
-        if len(filtered_orders) > 0 and 'order_channel' in filtered_orders.columns:
-            channel_orders = filtered_orders.groupby('order_channel').agg({
+        # LOCAL FILTER for Channel Chart
+        channel_city_options = ['All Cities'] + list(customers_df['city'].unique()) if 'city' in customers_df.columns else ['All Cities']
+        channel_city_filter = st.selectbox("City", channel_city_options, key="channel_city_filter")
+        
+        # Apply local filter
+        channel_filtered_orders = base_filtered_orders.copy()
+        if channel_city_filter != 'All Cities' and 'city' in customers_df.columns:
+            city_customer_ids = customers_df[customers_df['city'] == channel_city_filter]['customer_id']
+            channel_filtered_orders = channel_filtered_orders[channel_filtered_orders['customer_id'].isin(city_customer_ids)]
+        
+        if len(channel_filtered_orders) > 0 and 'order_channel' in channel_filtered_orders.columns:
+            channel_orders = channel_filtered_orders.groupby('order_channel').agg({
                 'order_id': 'count', 'net_amount': 'sum'
             }).reset_index()
             channel_orders.columns = ['Channel', 'Orders', 'Revenue']
-            channel_orders['Percentage'] = (channel_orders['Orders'] / channel_orders['Orders'].sum() * 100).round(1)
             
             fig = px.pie(channel_orders, values='Orders', names='Channel',
                         color_discrete_sequence=CHART_COLORS, hole=0.5)
@@ -765,45 +759,73 @@ if view_mode == "Executive View":
         else:
             st.info("No channel data available.")
     
-    with col2:
-        st.markdown("### 🛍️ Category Revenue by City")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ===== CHART 4: Category Revenue by City =====
+    st.markdown("### 🛍️ Category Revenue Analysis")
+    
+    # LOCAL FILTERS for Category Chart
+    cat_col1, cat_col2, cat_col3 = st.columns([1, 1, 2])
+    
+    with cat_col1:
+        cat_city_options = ['All Cities'] + list(customers_df['city'].unique()) if 'city' in customers_df.columns else ['All Cities']
+        cat_city_filter = st.selectbox("Filter by City", cat_city_options, key="cat_city_filter")
+    
+    with cat_col2:
+        cat_channel_options = ['All Channels'] + list(base_filtered_orders['order_channel'].unique()) if 'order_channel' in base_filtered_orders.columns else ['All Channels']
+        cat_channel_filter = st.selectbox("Filter by Channel", cat_channel_options, key="cat_channel_filter")
+    
+    # Apply local filters
+    cat_filtered_orders = base_filtered_orders.copy()
+    if cat_city_filter != 'All Cities' and 'city' in customers_df.columns:
+        city_customers = customers_df[customers_df['city'] == cat_city_filter]['customer_id']
+        cat_filtered_orders = cat_filtered_orders[cat_filtered_orders['customer_id'].isin(city_customers)]
+    
+    if cat_channel_filter != 'All Channels' and 'order_channel' in cat_filtered_orders.columns:
+        cat_filtered_orders = cat_filtered_orders[cat_filtered_orders['order_channel'] == cat_channel_filter]
+    
+    cat_filtered_items = base_filtered_order_items[base_filtered_order_items['order_id'].isin(cat_filtered_orders['order_id'])]
+    
+    if 'product_category' in cat_filtered_items.columns and len(cat_filtered_items) > 0:
+        cat_revenue = cat_filtered_items.groupby('product_category')['item_total'].sum().reset_index()
+        cat_revenue.columns = ['Category', 'Revenue']
+        cat_revenue = cat_revenue.sort_values('Revenue', ascending=False)
         
-        if 'city' in customers_df.columns and 'product_category' in filtered_order_items.columns:
-            orders_city = filtered_orders.merge(customers_df[['customer_id', 'city']], on='customer_id')
-            orders_detail = orders_city.merge(
-                filtered_order_items[['order_id', 'product_category', 'item_total']], on='order_id'
-            )
-            
-            if len(orders_detail) > 0:
-                cat_city = orders_detail.groupby(['city', 'product_category'])['item_total'].sum().reset_index()
-                cat_city.columns = ['City', 'Category', 'Revenue']
-                
-                fig = px.bar(cat_city, x='City', y='Revenue', color='Category',
-                            color_discrete_sequence=CHART_COLORS, barmode='stack')
-                fig.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                    font_color='#e8e8e8',
-                    xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title=''),
-                    yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Revenue (AED)'),
-                    legend=dict(orientation='h', yanchor='bottom', y=1.02, bgcolor='rgba(0,0,0,0)'),
-                    margin=dict(l=0, r=0, t=40, b=0)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No data available.")
-        else:
-            st.info("Category or city data not available.")
+        fig = px.bar(cat_revenue, x='Category', y='Revenue', color='Category',
+                    color_discrete_sequence=CHART_COLORS)
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#e8e8e8', showlegend=False,
+            xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title=''),
+            yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Revenue (AED)'),
+            margin=dict(l=0, r=0, t=20, b=0)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No category data available.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== CUSTOMER TIER DISTRIBUTION (BONUS) =====
+    # ===== CUSTOMER TIER DISTRIBUTION =====
     st.markdown("### 👑 Customer Tier Distribution")
+    
+    # LOCAL FILTER for Tier Chart
+    tier_col1, tier_col2, _ = st.columns([1, 1, 2])
+    
+    with tier_col1:
+        tier_city_options = ['All Cities'] + list(customers_df['city'].unique()) if 'city' in customers_df.columns else ['All Cities']
+        tier_city_filter = st.selectbox("Filter by City", tier_city_options, key="tier_city_filter")
+    
+    # Apply local filter
+    tier_filtered_customers = base_filtered_customers.copy()
+    if tier_city_filter != 'All Cities' and 'city' in tier_filtered_customers.columns:
+        tier_filtered_customers = tier_filtered_customers[tier_filtered_customers['city'] == tier_city_filter]
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if 'customer_tier' in filtered_customers.columns:
-            tier_dist = filtered_customers['customer_tier'].value_counts().reset_index()
+        if 'customer_tier' in tier_filtered_customers.columns:
+            tier_dist = tier_filtered_customers['customer_tier'].value_counts().reset_index()
             tier_dist.columns = ['Tier', 'Count']
             tier_order = ['Bronze', 'Silver', 'Gold', 'Platinum']
             tier_dist['Tier'] = pd.Categorical(tier_dist['Tier'], categories=tier_order, ordered=True)
@@ -823,7 +845,9 @@ if view_mode == "Executive View":
     
     with col2:
         if 'customer_tier' in customers_df.columns:
-            tier_revenue = filtered_orders.merge(customers_df[['customer_id', 'customer_tier']], on='customer_id')
+            tier_customer_ids = tier_filtered_customers['customer_id']
+            tier_orders = base_filtered_orders[base_filtered_orders['customer_id'].isin(tier_customer_ids)]
+            tier_revenue = tier_orders.merge(customers_df[['customer_id', 'customer_tier']], on='customer_id')
             tier_rev_agg = tier_revenue.groupby('customer_tier')['net_amount'].sum().reset_index()
             tier_rev_agg.columns = ['Tier', 'Revenue']
             tier_order = ['Bronze', 'Silver', 'Gold', 'Platinum']
@@ -848,39 +872,30 @@ if view_mode == "Executive View":
     st.markdown("### 💡 Executive Insights")
     
     # Calculate insights
-    top_city, top_city_rev, bottom_city = "N/A", 0, "N/A"
+    top_city, top_city_rev = "N/A", 0
     if 'city' in customers_df.columns:
-        city_revenue = filtered_orders.merge(customers_df[['customer_id', 'city']], on='customer_id')
+        city_revenue = base_filtered_orders.merge(customers_df[['customer_id', 'city']], on='customer_id')
         if 'order_status' in city_revenue.columns:
             city_revenue = city_revenue[city_revenue['order_status'] == 'Delivered']
         if len(city_revenue) > 0:
-            city_agg = city_revenue.groupby('city')['net_amount'].sum().reset_index()
-            city_agg.columns = ['City', 'Revenue']
-            city_agg = city_agg.sort_values('Revenue', ascending=True)
+            city_agg = city_revenue.groupby('city')['net_amount'].sum()
             if len(city_agg) > 0:
-                top_city = city_agg.iloc[-1]['City']
-                top_city_rev = city_agg.iloc[-1]['Revenue']
-                bottom_city = city_agg.iloc[0]['City']
+                top_city = city_agg.idxmax()
+                top_city_rev = city_agg.max()
     
-    top_channel, top_channel_pct = "N/A", 0
-    if 'order_channel' in filtered_orders.columns and len(filtered_orders) > 0:
-        channel_orders = filtered_orders.groupby('order_channel').size().reset_index()
-        channel_orders.columns = ['Channel', 'Orders']
-        channel_orders['Percentage'] = (channel_orders['Orders'] / channel_orders['Orders'].sum() * 100).round(1)
-        if len(channel_orders) > 0:
-            top_channel = channel_orders.loc[channel_orders['Orders'].idxmax()]['Channel']
-            top_channel_pct = channel_orders.loc[channel_orders['Orders'].idxmax()]['Percentage']
+    top_channel = "N/A"
+    if 'order_channel' in base_filtered_orders.columns:
+        top_channel = base_filtered_orders['order_channel'].value_counts().idxmax()
     
     st.markdown(f"""
     <div class='insight-box'>
-        <div class='insight-title'>📊 Key Findings & Recommendations</div>
+        <div class='insight-title'>📊 Key Findings</div>
         <div class='insight-text'>
-            <p>• <strong>Top performing city is {top_city}</strong> with <strong>AED {top_city_rev:,.0f}</strong> in revenue. Consider increasing marketing investment here.</p>
-            <p>• <strong>Underperforming city: {bottom_city}</strong> — Investigate delivery issues or regional preferences.</p>
-            <p>• <strong>{top_channel} channel</strong> contributes <strong>{top_channel_pct:.1f}%</strong> of orders — Optimize other channels for diversification.</p>
-            <p>• <strong>Repeat customer rate is {exec_kpis['repeat_rate']:.1f}%</strong> — {'Healthy loyalty base.' if exec_kpis['repeat_rate'] > 30 else 'Launch retention campaigns to improve loyalty.'}</p>
-            <p>• <strong>Discount burn accounts for {exec_kpis['discount_rate']:.1f}%</strong> of gross revenue — {'Within acceptable limits.' if exec_kpis['discount_rate'] < 15 else 'Review promotional strategy to protect margins.'}</p>
-            <p>• <strong>Revenue {('increased' if exec_kpis['revenue_change'] >= 0 else 'decreased')} by {abs(exec_kpis['revenue_change']):.1f}%</strong> compared to previous period.</p>
+            <p>• <strong>Total Revenue: {format_currency_full(exec_kpis['total_revenue'])}</strong> from {exec_kpis['delivered_count']:,} delivered orders.</p>
+            <p>• <strong>Top City: {top_city}</strong> with {format_currency_short(top_city_rev)} in revenue.</p>
+            <p>• <strong>Leading Channel: {top_channel}</strong> — consider optimizing other channels for growth.</p>
+            <p>• <strong>Repeat Rate: {exec_kpis['repeat_rate']:.1f}%</strong> — {'Strong customer loyalty!' if exec_kpis['repeat_rate'] > 30 else 'Consider retention campaigns.'}</p>
+            <p>• <strong>Discount Burn: {exec_kpis['discount_rate']:.1f}%</strong> of gross revenue.</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -891,61 +906,107 @@ if view_mode == "Executive View":
 
 else:
     
-    # ===== 4 KPI CARDS =====
+    # ===== 4 KPI CARDS (Clean - No Deltas) WITH BREACH BREAKDOWN =====
     st.markdown("### 🔧 Operational KPIs")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        rate_class = 'kpi-delta-positive' if mgr_kpis['on_time_rate'] > 85 else 'kpi-delta-negative'
         st.markdown(f"""
         <div class='kpi-card'>
             <div class='kpi-label'>On-Time Delivery Rate</div>
             <div class='kpi-value'>{mgr_kpis['on_time_rate']:.1f}%</div>
-            <div class='{rate_class}'>Target: 85%</div>
+            <div class='kpi-subtitle'>Target: 85%</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
+        # SLA BREACH WITH BREAKDOWN
+        breach_breakdown_html = ""
+        if mgr_kpis['breach_by_zone']:
+            breach_breakdown_html += "<div class='breach-breakdown'><strong style='color:#f87171;'>Top Breach Zones:</strong>"
+            for zone, count in list(mgr_kpis['breach_by_zone'].items())[:3]:
+                breach_breakdown_html += f"<div class='breach-item'>• {zone}: {count}</div>"
+            breach_breakdown_html += "</div>"
+        
         st.markdown(f"""
         <div class='kpi-card'>
             <div class='kpi-label'>SLA Breach Count</div>
-            <div class='kpi-value'>{mgr_kpis['sla_breach_count']:,}</div>
-            <div class='kpi-delta-negative'>Requires Attention</div>
+            <div class='kpi-value' style='color: #f87171;'>{mgr_kpis['sla_breach_count']:,}</div>
+            {breach_breakdown_html}
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        cancel_class = 'kpi-delta-positive' if mgr_kpis['cancellation_rate'] < 10 else 'kpi-delta-negative'
         st.markdown(f"""
         <div class='kpi-card'>
             <div class='kpi-label'>Cancellation Rate</div>
             <div class='kpi-value'>{mgr_kpis['cancellation_rate']:.1f}%</div>
-            <div class='{cancel_class}'>Target: &lt;10%</div>
+            <div class='kpi-subtitle'>{mgr_kpis['cancelled_orders']:,} cancelled orders</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
+        # TOTAL REFUNDS AS % OF REVENUE
+        refund_short = format_currency_short(mgr_kpis['total_refunds'])
         st.markdown(f"""
-        <div class='kpi-card'>
+        <div class='kpi-card' title='Full Amount: {format_currency_full(mgr_kpis["total_refunds"])}'>
             <div class='kpi-label'>Total Refunds</div>
-            <div class='kpi-value'>AED {mgr_kpis['total_refunds']:,.0f}</div>
-            <div class='kpi-delta-negative'>Cost Impact</div>
+            <div class='kpi-value' style='color: #fb923c;'>{refund_short}</div>
+            <div class='kpi-subtitle' style='color: #f87171;'>{refund_percentage:.1f}% of Total Revenue</div>
         </div>
         """, unsafe_allow_html=True)
     
+    # ===== ADDITIONAL BREACH BREAKDOWN DETAILS =====
+    if mgr_kpis['breach_by_partner'] or mgr_kpis['breach_by_reason']:
+        st.markdown("#### 📍 SLA Breach Breakdown Details")
+        
+        breach_col1, breach_col2, breach_col3 = st.columns(3)
+        
+        with breach_col1:
+            st.markdown("**By Delivery Zone:**")
+            if mgr_kpis['breach_by_zone']:
+                for zone, count in mgr_kpis['breach_by_zone'].items():
+                    st.markdown(f"• {zone}: **{count}**")
+            else:
+                st.markdown("*No zone data*")
+        
+        with breach_col2:
+            st.markdown("**By Delivery Partner:**")
+            if mgr_kpis['breach_by_partner']:
+                for partner, count in mgr_kpis['breach_by_partner'].items():
+                    st.markdown(f"• {partner}: **{count}**")
+            else:
+                st.markdown("*No partner data*")
+        
+        with breach_col3:
+            st.markdown("**By Delay Reason:**")
+            if mgr_kpis['breach_by_reason']:
+                for reason, count in mgr_kpis['breach_by_reason'].items():
+                    st.markdown(f"• {reason}: **{count}**")
+            else:
+                st.markdown("*No reason data*")
+    
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== CHART 1 & 2 =====
+    # ===== CHART 1 & 2: SLA Breach Trend & Breaches by Zone =====
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("### 📈 SLA Breach Trend")
         
-        if 'actual_delivery_date' in filtered_fulfillment.columns and 'promised_date' in filtered_fulfillment.columns:
-            breach_data = filtered_fulfillment[
-                (filtered_fulfillment['actual_delivery_date'].notna()) &
-                (filtered_fulfillment['actual_delivery_date'] > filtered_fulfillment['promised_date'])
+        # LOCAL FILTER
+        breach_partner_options = ['All Partners'] + list(base_filtered_fulfillment['delivery_partner'].unique()) if 'delivery_partner' in base_filtered_fulfillment.columns else ['All Partners']
+        breach_partner_filter = st.selectbox("Filter by Partner", breach_partner_options, key="breach_partner_filter")
+        
+        breach_data = base_filtered_fulfillment.copy()
+        if breach_partner_filter != 'All Partners' and 'delivery_partner' in breach_data.columns:
+            breach_data = breach_data[breach_data['delivery_partner'] == breach_partner_filter]
+        
+        if 'actual_delivery_date' in breach_data.columns and 'promised_date' in breach_data.columns:
+            breach_data = breach_data[
+                (breach_data['actual_delivery_date'].notna()) &
+                (breach_data['actual_delivery_date'] > breach_data['promised_date'])
             ].copy()
             
             if len(breach_data) > 0:
@@ -963,24 +1024,31 @@ else:
                     yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='SLA Breaches'),
                     margin=dict(l=0, r=0, t=20, b=0)
                 )
-                fig.update_traces(line=dict(width=3), marker=dict(size=6))
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.success("No SLA breaches in selected period! ✅")
+                st.success("No SLA breaches found! ✅")
         else:
             st.info("Delivery date data not available.")
     
     with col2:
-        st.markdown("### 📍 Breaches by Delivery Zone (Top 10)")
+        st.markdown("### 📍 Breaches by Zone (Top 10)")
         
-        if 'actual_delivery_date' in filtered_fulfillment.columns and 'promised_date' in filtered_fulfillment.columns:
-            breach_data = filtered_fulfillment[
-                (filtered_fulfillment['actual_delivery_date'].notna()) &
-                (filtered_fulfillment['actual_delivery_date'] > filtered_fulfillment['promised_date'])
-            ].copy()
+        # LOCAL FILTER
+        zone_partner_options = ['All Partners'] + list(base_filtered_fulfillment['delivery_partner'].unique()) if 'delivery_partner' in base_filtered_fulfillment.columns else ['All Partners']
+        zone_partner_filter = st.selectbox("Filter by Partner", zone_partner_options, key="zone_partner_filter")
+        
+        zone_breach_data = base_filtered_fulfillment.copy()
+        if zone_partner_filter != 'All Partners' and 'delivery_partner' in zone_breach_data.columns:
+            zone_breach_data = zone_breach_data[zone_breach_data['delivery_partner'] == zone_partner_filter]
+        
+        if 'actual_delivery_date' in zone_breach_data.columns and 'promised_date' in zone_breach_data.columns:
+            zone_breach_data = zone_breach_data[
+                (zone_breach_data['actual_delivery_date'].notna()) &
+                (zone_breach_data['actual_delivery_date'] > zone_breach_data['promised_date'])
+            ]
             
-            if len(breach_data) > 0 and 'delivery_zone' in breach_data.columns:
-                zone_breaches = breach_data.groupby('delivery_zone').size().reset_index()
+            if len(zone_breach_data) > 0 and 'delivery_zone' in zone_breach_data.columns:
+                zone_breaches = zone_breach_data.groupby('delivery_zone').size().reset_index()
                 zone_breaches.columns = ['Zone', 'Breaches']
                 zone_breaches = zone_breaches.sort_values('Breaches', ascending=False).head(10)
                 zone_breaches = zone_breaches.sort_values('Breaches', ascending=True)
@@ -996,24 +1064,32 @@ else:
                 )
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("No zone data available.")
+                st.info("No zone breach data available.")
         else:
             st.info("Delivery data not available.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== CHART 3 & 4 =====
+    # ===== CHART 3 & 4: Pareto & Return Rate =====
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### ⚠️ Delay Reasons (Pareto Analysis)")
+        st.markdown("### ⚠️ Delay Reasons (Pareto)")
         
-        if 'delay_reason' in filtered_fulfillment.columns:
-            delay_data = filtered_fulfillment[
-                (filtered_fulfillment['delay_reason'].notna()) &
-                (filtered_fulfillment['delay_reason'] != 'No Delay') &
-                (filtered_fulfillment['delay_reason'] != 'Order Cancelled') &
-                (filtered_fulfillment['delay_reason'] != '')
+        # LOCAL FILTER
+        delay_zone_options = ['All Zones'] + list(base_filtered_fulfillment['delivery_zone'].dropna().unique()) if 'delivery_zone' in base_filtered_fulfillment.columns else ['All Zones']
+        delay_zone_filter = st.selectbox("Filter by Zone", delay_zone_options, key="delay_zone_filter")
+        
+        delay_data = base_filtered_fulfillment.copy()
+        if delay_zone_filter != 'All Zones' and 'delivery_zone' in delay_data.columns:
+            delay_data = delay_data[delay_data['delivery_zone'] == delay_zone_filter]
+        
+        if 'delay_reason' in delay_data.columns:
+            delay_data = delay_data[
+                (delay_data['delay_reason'].notna()) &
+                (delay_data['delay_reason'] != 'No Delay') &
+                (delay_data['delay_reason'] != 'Order Cancelled') &
+                (delay_data['delay_reason'] != '')
             ]
             
             if len(delay_data) > 0:
@@ -1057,16 +1133,29 @@ else:
     with col2:
         st.markdown("### ↩️ Return Rate by Category")
         
-        if 'product_category' in filtered_order_items.columns and len(filtered_returns) > 0:
-            returns_cat = filtered_returns.merge(
-                filtered_order_items[['order_id', 'product_category']].drop_duplicates('order_id'),
+        # LOCAL FILTER
+        return_city_options = ['All Cities'] + list(customers_df['city'].unique()) if 'city' in customers_df.columns else ['All Cities']
+        return_city_filter = st.selectbox("Filter by City", return_city_options, key="return_city_filter")
+        
+        # Apply local filter
+        return_filtered_orders = base_filtered_orders.copy()
+        if return_city_filter != 'All Cities' and 'city' in customers_df.columns:
+            city_customers = customers_df[customers_df['city'] == return_city_filter]['customer_id']
+            return_filtered_orders = return_filtered_orders[return_filtered_orders['customer_id'].isin(city_customers)]
+        
+        return_filtered_items = base_filtered_order_items[base_filtered_order_items['order_id'].isin(return_filtered_orders['order_id'])]
+        return_filtered_returns = base_filtered_returns[base_filtered_returns['order_id'].isin(return_filtered_orders['order_id'])]
+        
+        if 'product_category' in return_filtered_items.columns and len(return_filtered_returns) > 0:
+            returns_cat = return_filtered_returns.merge(
+                return_filtered_items[['order_id', 'product_category']].drop_duplicates('order_id'),
                 on='order_id', how='left'
             )
             
             cat_returns = returns_cat.groupby('product_category').size().reset_index()
             cat_returns.columns = ['Category', 'Returns']
             
-            cat_orders = filtered_order_items.groupby('product_category')['order_id'].nunique().reset_index()
+            cat_orders = return_filtered_items.groupby('product_category')['order_id'].nunique().reset_index()
             cat_orders.columns = ['Category', 'Orders']
             
             return_rate = cat_returns.merge(cat_orders, on='Category')
@@ -1082,7 +1171,7 @@ else:
                     font_color='#e8e8e8', showlegend=False, coloraxis_showscale=False,
                     xaxis=dict(gridcolor='rgba(58,134,255,0.1)', title=''),
                     yaxis=dict(gridcolor='rgba(58,134,255,0.1)', title='Return Rate (%)',
-                              range=[0, max(return_rate['Return Rate']) * 1.3 if len(return_rate) > 0 else 10]),
+                              range=[0, max(return_rate['Return Rate']) * 1.3]),
                     margin=dict(l=0, r=0, t=20, b=0)
                 )
                 st.plotly_chart(fig, use_container_width=True)
@@ -1096,8 +1185,20 @@ else:
     # ===== SORTABLE TABLE =====
     st.markdown("### 📋 Top 10 Problem Areas (Sortable)")
     
-    if 'delivery_zone' in filtered_fulfillment.columns and 'actual_delivery_date' in filtered_fulfillment.columns:
-        zone_analysis = filtered_fulfillment.copy()
+    # LOCAL FILTER
+    table_col1, table_col2, _ = st.columns([1, 1, 2])
+    
+    with table_col1:
+        table_partner_options = ['All Partners'] + list(base_filtered_fulfillment['delivery_partner'].unique()) if 'delivery_partner' in base_filtered_fulfillment.columns else ['All Partners']
+        table_partner_filter = st.selectbox("Filter by Partner", table_partner_options, key="table_partner_filter")
+    
+    # Apply local filter
+    table_data = base_filtered_fulfillment.copy()
+    if table_partner_filter != 'All Partners' and 'delivery_partner' in table_data.columns:
+        table_data = table_data[table_data['delivery_partner'] == table_partner_filter]
+    
+    if 'delivery_zone' in table_data.columns and 'actual_delivery_date' in table_data.columns:
+        zone_analysis = table_data.copy()
         zone_analysis['is_breach'] = zone_analysis['actual_delivery_date'] > zone_analysis['promised_date']
         zone_analysis['delay_days'] = (zone_analysis['actual_delivery_date'] - zone_analysis['promised_date']).dt.days
         zone_analysis.loc[zone_analysis['delay_days'] < 0, 'delay_days'] = 0
@@ -1108,8 +1209,8 @@ else:
             'delay_reason': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'N/A',
             'order_id': 'count'
         }).reset_index()
-        problem_zones.columns = ['Delivery Zone', 'SLA Breach Count', 'Avg Delay Days', 'Top Delay Reason', 'Total Orders']
-        problem_zones = problem_zones.sort_values('SLA Breach Count', ascending=False).head(10)
+        problem_zones.columns = ['Delivery Zone', 'SLA Breaches', 'Avg Delay Days', 'Top Delay Reason', 'Total Orders']
+        problem_zones = problem_zones.sort_values('SLA Breaches', ascending=False).head(10)
         problem_zones['Avg Delay Days'] = problem_zones['Avg Delay Days'].round(1)
         
         st.dataframe(
@@ -1117,7 +1218,7 @@ else:
             use_container_width=True,
             column_config={
                 "Delivery Zone": st.column_config.TextColumn("Delivery Zone"),
-                "SLA Breach Count": st.column_config.NumberColumn("SLA Breaches", format="%d"),
+                "SLA Breaches": st.column_config.NumberColumn("SLA Breaches", format="%d"),
                 "Avg Delay Days": st.column_config.NumberColumn("Avg Delay (Days)", format="%.1f"),
                 "Top Delay Reason": st.column_config.TextColumn("Primary Reason"),
                 "Total Orders": st.column_config.NumberColumn("Total Orders", format="%d")
@@ -1128,36 +1229,34 @@ else:
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ===== DRILL-DOWN (COMPLETE) =====
+    # ===== DRILL-DOWN =====
     st.markdown("### 🔍 Zone Drill-Down Analysis")
     
-    if 'delivery_zone' in filtered_fulfillment.columns:
-        zone_list = filtered_fulfillment['delivery_zone'].dropna().unique().tolist()
+    # LOCAL FILTER
+    if 'delivery_zone' in base_filtered_fulfillment.columns:
+        zone_list = base_filtered_fulfillment['delivery_zone'].dropna().unique().tolist()
         
         if len(zone_list) > 0:
-            selected_zone = st.selectbox("Select a Delivery Zone for Detailed Breakdown", zone_list)
+            selected_zone = st.selectbox("Select a Delivery Zone", zone_list, key="drill_zone")
             
             if selected_zone:
-                zone_detail = filtered_fulfillment[filtered_fulfillment['delivery_zone'] == selected_zone]
-                zone_orders = filtered_orders[filtered_orders['order_id'].isin(zone_detail['order_id'])]
+                zone_detail = base_filtered_fulfillment[base_filtered_fulfillment['delivery_zone'] == selected_zone]
+                zone_orders = base_filtered_orders[base_filtered_orders['order_id'].isin(zone_detail['order_id'])]
                 
-                # KPI Row
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    total_deliveries = len(zone_detail)
-                    st.metric("Total Deliveries", f"{total_deliveries:,}")
+                    st.metric("Total Deliveries", f"{len(zone_detail):,}")
                 
                 with col2:
                     if 'actual_delivery_date' in zone_detail.columns and 'promised_date' in zone_detail.columns:
                         on_time_zone = len(zone_detail[zone_detail['actual_delivery_date'] <= zone_detail['promised_date']])
-                        on_time_pct = (on_time_zone / total_deliveries * 100) if total_deliveries > 0 else 0
+                        on_time_pct = (on_time_zone / len(zone_detail) * 100) if len(zone_detail) > 0 else 0
                     else:
                         on_time_pct = 0
                     st.metric("On-Time Rate", f"{on_time_pct:.1f}%")
                 
                 with col3:
-                    # CANCELLATION RATE FOR ZONE
                     if 'order_status' in zone_orders.columns:
                         zone_cancelled = len(zone_orders[zone_orders['order_status'] == 'Cancelled'])
                         zone_cancel_rate = (zone_cancelled / len(zone_orders) * 100) if len(zone_orders) > 0 else 0
@@ -1172,16 +1271,14 @@ else:
                         breach_zone = 0
                     st.metric("SLA Breaches", f"{breach_zone:,}")
                 
-                # Charts Row
+                # Partner Performance Chart
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    # Delay Reasons Breakdown
                     if 'delay_reason' in zone_detail.columns:
                         zone_delays = zone_detail[
                             (zone_detail['delay_reason'].notna()) & 
-                            (zone_detail['delay_reason'] != 'No Delay') &
-                            (zone_detail['delay_reason'] != '')
+                            (zone_detail['delay_reason'] != 'No Delay')
                         ]
                         if len(zone_delays) > 0:
                             delay_breakdown = zone_delays['delay_reason'].value_counts().reset_index()
@@ -1192,17 +1289,14 @@ else:
                             fig.update_layout(
                                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                                 font_color='#e8e8e8',
-                                title=dict(text='Delay Reasons Breakdown', font=dict(color='#ffffff')),
+                                title=dict(text='Delay Reasons', font=dict(color='#ffffff')),
                                 margin=dict(l=0, r=0, t=40, b=0)
                             )
                             st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("No delays in this zone.")
-                    else:
-                        st.info("Delay reason data not available.")
                 
                 with col2:
-                    # DELIVERY PARTNER PERFORMANCE
                     if 'delivery_partner' in zone_detail.columns:
                         zone_detail_copy = zone_detail.copy()
                         if 'actual_delivery_date' in zone_detail_copy.columns and 'promised_date' in zone_detail_copy.columns:
@@ -1230,24 +1324,17 @@ else:
                         fig.update_layout(
                             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                             font_color='#e8e8e8', showlegend=False, coloraxis_showscale=False,
-                            title=dict(text='Delivery Partner Performance', font=dict(color='#ffffff')),
+                            title=dict(text='Partner Performance', font=dict(color='#ffffff')),
                             xaxis=dict(title='On-Time Rate (%)', range=[0, 110]),
                             yaxis=dict(title=''),
                             margin=dict(l=0, r=0, t=40, b=0)
                         )
                         st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info("Delivery partner data not available.")
-        else:
-            st.info("No delivery zones available.")
-    else:
-        st.info("Delivery zone data not available.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
     # ===== WHAT-IF ANALYSIS =====
     st.markdown("### 🔮 What-If Analysis")
-    st.markdown("*Adjust parameters to project business impact*")
     
     col1, col2 = st.columns(2)
     
@@ -1261,14 +1348,13 @@ else:
         
         current_cancelled = mgr_kpis['cancelled_orders']
         reduced_cancellations = int(current_cancelled * (cancellation_reduction / 100))
-        # FORMULA: Additional Revenue = Cancelled Order Value × (Slider % / 100)
         recovered_revenue = reduced_cancellations * mgr_kpis['avg_order_value']
         
         st.markdown(f"""
         <div class='whatif-box'>
-            <p style='color: #e8e8e8; margin-bottom: 10px;'>If cancellations reduced by <strong>{cancellation_reduction}%</strong>:</p>
+            <p style='color: #e8e8e8;'>If cancellations reduced by <strong>{cancellation_reduction}%</strong>:</p>
             <p style='color: #e8e8e8;'>Orders Recovered: <span class='whatif-value'>{reduced_cancellations:,}</span></p>
-            <p style='color: #e8e8e8;'>Additional Revenue: <span class='whatif-value'>AED {recovered_revenue:,.0f}</span></p>
+            <p style='color: #e8e8e8;'>Additional Revenue: <span class='whatif-value'>{format_currency_short(recovered_revenue)}</span></p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1288,26 +1374,24 @@ else:
         
         st.markdown(f"""
         <div class='whatif-box'>
-            <p style='color: #e8e8e8; margin-bottom: 10px;'>If on-time delivery improves by <strong>{delivery_improvement}%</strong>:</p>
+            <p style='color: #e8e8e8;'>If on-time delivery improves by <strong>{delivery_improvement}%</strong>:</p>
             <p style='color: #e8e8e8;'>New On-Time Rate: <span class='whatif-value'>{new_on_time:.1f}%</span></p>
             <p style='color: #e8e8e8;'>Breaches Avoided: <span class='whatif-value'>{reduced_breaches:,}</span></p>
-            <p style='color: #e8e8e8;'>Refund Cost Savings: <span class='whatif-value'>AED {cost_savings:,.0f}</span></p>
+            <p style='color: #e8e8e8;'>Refund Savings: <span class='whatif-value'>{format_currency_short(cost_savings)}</span></p>
         </div>
         """, unsafe_allow_html=True)
     
     # Combined Impact
-    st.markdown("#### 💰 Combined Impact Summary")
-    
     total_benefit = recovered_revenue + cost_savings
     
     st.markdown(f"""
     <div class='insight-box' style='border-left-color: #4ade80;'>
-        <div class='insight-title' style='color: #4ade80;'>📊 Total Projected Benefit</div>
+        <div class='insight-title' style='color: #4ade80;'>💰 Total Projected Benefit</div>
         <div style='text-align: center; padding: 20px;'>
-            <span style='font-size: 2.5rem; font-weight: bold; color: #4ade80;'>AED {total_benefit:,.0f}</span>
+            <span style='font-size: 2.5rem; font-weight: bold; color: #4ade80;'>{format_currency_short(total_benefit)}</span>
             <p style='color: #e8e8e8; margin-top: 15px;'>
-                Additional Revenue: <strong>AED {recovered_revenue:,.0f}</strong> | 
-                Cost Savings: <strong>AED {cost_savings:,.0f}</strong>
+                Revenue Recovery: <strong>{format_currency_short(recovered_revenue)}</strong> | 
+                Cost Savings: <strong>{format_currency_short(cost_savings)}</strong>
             </p>
         </div>
     </div>
